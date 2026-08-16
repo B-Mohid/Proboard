@@ -45,18 +45,18 @@ query getUserProfile($username: String!) {
 _LC_HEADERS = {
     "Content-Type": "application/json",
     "Referer": "https://leetcode.com",
+    
 }
 
-
-def _empty_lc() -> dict[str, int]:
-    return {"lc_easy": 0, "lc_medium": 0, "lc_hard": 0, "lc_total": 0}
+def _empty_lc(error: bool = False) -> dict[str, int | bool]:
+    return {"lc_easy": 0, "lc_medium": 0, "lc_hard": 0, "lc_total": 0, "api_error": error}
 
 
 async def _fetch_leetcode(
     session: aiohttp.ClientSession,
     sem: asyncio.Semaphore,
     handle: str,
-) -> dict[str, int]:
+) -> dict[str, int | bool]:
     """
     Fetch accepted-submission counts from LeetCode's GraphQL API.
 
@@ -68,6 +68,7 @@ async def _fetch_leetcode(
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             async with sem:
+                await asyncio.sleep(0.5)
                 async with session.post(
                     _LC_GRAPHQL_URL,
                     json=payload,

@@ -33,7 +33,7 @@ TIER_LOW = "⚠️ Needs Attention"
 # Core: Build Leaderboard from DB
 # ---------------------------------------------------------------------------
 def build_leaderboard(
-    session: Session,
+    session: "Session",
     snapshot_date: date | None = None,
 ) -> pd.DataFrame:
     """
@@ -77,7 +77,17 @@ def build_leaderboard(
                 "total_score": stat.total_score if stat else 0.0,
             }
         )
+    
+    # 1. First instantiate the DataFrame
+    df = pd.DataFrame(records)
+    if df.empty:
+        return df
 
+    # 3. Add existing computed columns
+    df["composite_score"] = compute_composite_score(df["lc_total"], df["hr_score"])
+    df["velocity_7d"] = _velocity_bulk(session, df["roll_no"].tolist(), today)
+    df["progress_tier"] = assign_progress_tiers(df["composite_score"].values)
+    df["platform_affinity"] = df.apply(classify_platform_affinity, axis=1)
     df = pd.DataFrame(records)
     if df.empty:
         return df
@@ -246,7 +256,8 @@ def get_at_risk(df: pd.DataFrame) -> pd.DataFrame:
 
     def _reason(row: pd.Series) -> str:
         reasons = []
-        if row["total_score"] == 0 and row["lc_handle"] is not None:
+        # Use pd.notna() instead of 'is not None' for Pandas DataFrames
+        if row["total_score"] == 0 and pd.notna(row["lc_handle"]):
             reasons.append("Possible API failure")
         if row["velocity_7d"] == 0 and row["total_score"] > 0:
             reasons.append("Stagnant (0 progress in 7 days)")
@@ -256,3 +267,14 @@ def get_at_risk(df: pd.DataFrame) -> pd.DataFrame:
 
     at_risk["risk_reason"] = at_risk.apply(_reason, axis=1)
     return at_risk.reset_index(drop=True)
+
+
+def assign_status_and_sort(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    This contains the repaired lines from the bottom of your snippet.
+    """
+    # Apply the categorize_student function (make sure it's defined elsewhere)
+    df["status"] = df.apply(categorize_student, axis=1) 
+    
+    # Fixed the cut-off 'ascen' parameter
+    return df.sort_values("composite_score", ascending=False)

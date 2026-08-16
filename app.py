@@ -74,14 +74,73 @@ st.markdown(
         border-color: #7c3aed;
     }
 
-    /* Sidebar */
+/* Sidebar */
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f0f1a 0%, #1a1a2e 100%);
+        background: linear-gradient(180deg, #ffa751 0%, #ff7b00 80%);
+        color: #000 !important; /* Ensures standard text in the sidebar is white */
+    }
+    /* Target the Drag and Drop File Box in the sidebar */
+    section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
+        background: linear-gradient(135deg,#fff) !important;
+        border: 1px dashed rgba(255, 255, 255, 0.6) !important;
+        border-radius: 8px;
+    }
+    
+    /* Ensure the text inside the Drag and Drop box turns white */
+    section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] div,
+    section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] span,
+    section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] small {
+        color: orange!important;
+    }
+    /* Ensure the text inside the Drag and Drop box turns white */
+    section[data-testid="stSidebar"] [data-testid="stUrlUploaderDropzone"] div,
+    section[data-testid="stSidebar"] [data-testid="stUrlUploaderDropzone"] span,
+    section[data-testid="stSidebar"] [data-testid="stUrlUploaderDropzone"] small {
+        color: orange !important;
     }
 
+    /* Target all buttons in the sidebar: Process Upload, Reload, and Browse Files */
+    section[data-testid="stSidebar"] .stButton > button,
+    section[data-testid="stSidebar"] .stFormSubmitButton > button,
+    section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button,
+    section[data-testid="stSidebar"] [data-testid="stUrlUploaderDropzone"] button {
+        background: linear-gradient(135deg, #ffa751 0%, #ff6b00 25%) !important;
+        color: #000 !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        font-weight: 600 !important;
+        border-radius: 6px;
+    }
+
+    /* Add a hover effect for the buttons to invert the gradient */
+    section[data-testid="stSidebar"] .stButton > button:hover,
+    section[data-testid="stSidebar"] .stFormSubmitButton > button:hover,
+    section[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button:hover {
+        background: linear-gradient(135deg, #ffa751 0%, #ff6b00 25%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.6) !important;
+        color: #ffa751 !important;
+    }
+    /* 3. URL Input Box (Google Sheet Link) */
+    [data-testid="stSidebar"] [data-baseweb="input"] {
+        background: linear-gradient(135deg, #ffa751 0%, #ff6b00 25%) !important;
+        border: none !important;
+        border-radius: 8px !important;
+    }
+    
+    /* URL Input Typed Text Color */
+    [data-testid="stSidebar"] [data-baseweb="input"] input {
+        color: white !important;
+        -webkit-text-fill-color: orange !important; 
+    }
+    
+    /* URL Input Placeholder ("https://...") Color */
+    [data-testid="stSidebar"] [data-baseweb="input"] input::placeholder {
+        color: rgba(255, 255, 255, 0.6) !important;
+    }
+    
     /* Title shimmer */
     .proboard-title {
-        background: linear-gradient(90deg, #4a4ae8, #7c3aed, #ec4899, #4a4ae8);
+        /* Shimmer gradient sweeping between white and sunny orange */
+        background: linear-gradient(90deg, #ffffff, #4a4ae8, #ff6b00, #4a4ae8);
         background-size: 300% 100%;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
@@ -90,6 +149,7 @@ st.markdown(
         font-weight: 800;
         margin-bottom: 0;
     }
+    
     @keyframes shimmer {
         0%, 100% { background-position: 0% 50%; }
         50% { background-position: 100% 50%; }
@@ -188,7 +248,7 @@ def _load_leaderboard_from_db() -> pd.DataFrame:
 # Sidebar — Data Ingestion
 # ---------------------------------------------------------------------------
 with st.sidebar:
-    st.markdown("### 🔄 Data Ingestion")
+    st.markdown("### IMPORT DATA  ")
     st.caption("Upload a file or paste a Google Sheet URL to refresh data.")
 
     tab_upload, tab_url = st.tabs(["📁 Upload", "🔗 Sheet URL"])
@@ -473,7 +533,7 @@ with tab_charts:
                     theta=categories_closed,
                     fill="toself",
                     fillcolor="rgba(124, 58, 237, 0.25)",
-                    line=dict(color="#7c3aed", width=2),
+                    line=dict(color="#7b00ed", width=2),
                     marker=dict(size=6, color="#a78bfa"),
                     name="Cohort Average",
                 )
@@ -490,12 +550,12 @@ with tab_charts:
                     angularaxis=dict(
                         gridcolor="#333",
                         linecolor="#444",
-                        tickfont=dict(color="#ccc", size=11),
+                        tickfont=dict(color="#000", size=11),
                     ),
                 ),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                font_color="#ccc",
+                font_color="#000",
                 showlegend=True,
                 legend=dict(
                     orientation="h",
@@ -560,67 +620,114 @@ with tab_charts:
                     f"</div>",
                     unsafe_allow_html=True,
                 )
+# ---------------------------------------------------------------------------
+# Helper: Categorization Logic
+# ---------------------------------------------------------------------------
+def categorize_student(row):
+    """
+    Evaluates profile status and API outcomes using the cleaned dataset.
+    """
+    has_lc = pd.notna(row.get("lc_handle")) and str(row.get("lc_handle")).strip() != ""
+    has_hr = pd.notna(row.get("hr_handle")) and str(row.get("hr_handle")).strip() != ""
+    
+    # 1. Missing Links
+    if not has_lc and not has_hr:
+        return "Profile link not provided"
+        
+    # 2. Possible API Failures 
+    # If handles exist but total score across both platforms remains exactly 0
+    if row.get("total_score", 0) == 0 and (has_lc or has_hr):
+         return "Possible API Failure"
+             
+    # 3. Low Performers
+    if row.get("total_score", 0) < 10:
+        return "Low Performer"
+        
+    return "Active"
 
 
-# ========================= TAB 3 — INTERVENTION ===========================
+# ---------------------------------------------------------------------------
+# TAB 3: INTERVENTION PANEL
+# ---------------------------------------------------------------------------
 with tab_risk:
-    st.subheader("🚨 Intervention Panel")
-    st.caption(
-        f"Students with Velocity = 0 or Total Score < {AT_RISK_THRESHOLD}. "
-        "API failures are separated from genuine inactivity."
-    )
+    st.markdown("## 🚨 Intervention Panel")
 
-    if at_risk_df.empty:
-        st.success("🎉 No at-risk students today! Everyone is progressing.", icon="✅")
-    else:
-        # Split by risk type
-        api_fail = at_risk_df[
-            at_risk_df["risk_reason"].str.contains("API failure", na=False)
-        ]
-        inactive = at_risk_df[
-            ~at_risk_df["risk_reason"].str.contains("API failure", na=False)
-        ]
+    # Apply categorization using correct DataFrame column names
+    df["Status"] = df.apply(categorize_student, axis=1)
 
-        risk_col1, risk_col2 = st.columns(2)
-        with risk_col1:
-            st.metric("⚠️ Genuinely Inactive", len(inactive))
-        with risk_col2:
-            st.metric("🔧 Possible API Failures", len(api_fail))
+    # 1. Tab definitions: Replaced 'Loyal Leetcoders' with 'Custom Range Filter'
+    t1, t2, t3, t4 = st.tabs([
+        "⚠️ Low Performers (< 10 Solved)",
+        "🔧 InActive/Possible API Failure",
+        "🚫 Profile Link Not Provided",
+        "🎯 Custom LC Range Filter"
+    ])
 
-        st.markdown("---")
+    # Reusable table display configuration with clickable links
+    column_config = {
+        "lc_profile": st.column_config.LinkColumn("LeetCode", display_text="Open LeetCode ↗"),
+        "hr_profile": st.column_config.LinkColumn("HackerRank", display_text="Open HackerRank ↗"),
+    }
 
-        if not inactive.empty:
-            st.markdown("#### ⚠️ Students Needing Attention")
-            risk_display = [
-                "roll_no", "name", "lc_total", "hr_score",
-                "composite_score", "velocity_7d", "risk_reason",
-            ]
-            risk_display = [c for c in risk_display if c in inactive.columns]
-            st.dataframe(
-                inactive[risk_display],
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "roll_no": st.column_config.TextColumn("Roll No"),
-                    "name": st.column_config.TextColumn("Name"),
-                    "lc_total": st.column_config.NumberColumn("LC Total"),
-                    "hr_score": st.column_config.NumberColumn("HR Score", format="%.1f"),
-                    "composite_score": st.column_config.NumberColumn(
-                        "Composite", format="%.1f"
-                    ),
-                    "velocity_7d": st.column_config.NumberColumn(
-                        "Velocity 7D", format="%+.1f"
-                    ),
-                    "risk_reason": st.column_config.TextColumn("Reason", width="large"),
-                },
+    with t1:
+        low_performers = df[df["Status"] == "Low Performer"]
+        st.caption(f"Found {len(low_performers)} students with total score < 10")
+        st.dataframe(
+            low_performers[["roll_no", "name", "lc_total", "hr_badges", "lc_profile", "hr_profile"]],
+            column_config=column_config,
+            use_container_width=True,
+            hide_index=True
+        )
+
+    with t2:
+        api_failures = df[df["Status"] == "InActive/Possible API Failure"]
+        st.caption(f"Found {len(api_failures)} profiles triggering errors or account inactive or set to private (manual verification needed)")
+        st.dataframe(
+            api_failures[["roll_no", "name", "lc_profile", "hr_profile"]],
+            column_config=column_config,
+            use_container_width=True,
+            hide_index=True
+        )
+
+    with t3:
+        missing_links = df[df["Status"] == "Profile link not provided"]
+        st.caption(f"Found {len(missing_links)} students with no submitted profile links")
+        st.dataframe(
+            missing_links[["roll_no", "name"]],
+            use_container_width=True,
+            hide_index=True
+        )
+
+    with t4:
+        st.markdown("### Filter by LeetCode Solved Count")
+        
+        # Add a dual-ended slider for dynamic range selection
+        max_lc = int(df["lc_total"].max()) if not df.empty else 100
+        
+        # Prevent slider errors if the current max is 0 (e.g., empty data)
+        slider_max = max(max_lc + 20, 100) 
+        
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            lc_range = st.slider(
+                "Select LeetCode Total Range:",
+                min_value=0,
+                max_value=slider_max,
+                value=(60, slider_max), # Defaults to looking for 60+
+                step=1
             )
-
-        if not api_fail.empty:
-            with st.expander("🔧 Possible API Failures (profiles may be private)"):
-                api_display = ["roll_no", "name", "lc_handle", "hr_handle", "risk_reason"]
-                api_display = [c for c in api_display if c in api_fail.columns]
-                st.dataframe(
-                    api_fail[api_display],
-                    use_container_width=True,
-                    hide_index=True,
-                )
+            
+        min_val, max_val = lc_range
+        
+        # Filter and sort the dataframe based on slider input
+        filtered_df = df[(df["lc_total"] >= min_val) & (df["lc_total"] <= max_val)].copy()
+        filtered_df = filtered_df.sort_values("lc_total", ascending=False)
+        
+        st.caption(f"Found **{len(filtered_df)}** students who solved between **{min_val} and {max_val}** problems.")
+        
+        st.dataframe(
+            filtered_df[["roll_no", "name", "lc_total", "lc_easy", "lc_medium", "lc_hard", "lc_profile"]],
+            column_config=column_config,
+            use_container_width=True,
+            hide_index=True
+        )
