@@ -64,14 +64,14 @@ st.markdown(
     .stTabs [data-baseweb="tab"] {
         background: #1e1e2f;
         border-radius: 8px 8px 0 0;
-        border: 1px solid #3a3a5c;
+        border: 1px solid #000;
         color: #a0a0c0;
         padding: 8px 20px;
     }
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #4a4ae8, #7c3aed);
         color: #fff !important;
-        border-color: #7c3aed;
+        border-color: #000;
     }
 
 /* Sidebar */
@@ -168,7 +168,8 @@ def _init_state() -> None:
         st.session_state.leaderboard = pd.DataFrame()
     if "pipeline_ran" not in st.session_state:
         st.session_state.pipeline_ran = False
-
+    if "history" not in st.session_state:
+        st.session_state.history = []  
 
 _init_state()
 
@@ -211,15 +212,25 @@ def _run_pipeline(source, *, is_url: bool = False) -> None:
         with st.spinner("💾 Persisting daily snapshots…"):
             bulk_upsert_daily_stats(session, stats)
 
-        # 5. Build leaderboard
+       # 5. Build leaderboard
         with st.spinner("📊 Crunching analytics…"):
             leaderboard = build_leaderboard(session)
+
+        # --- NEW HISTORY LOGIC ---
+        import datetime
+        run_name = f"Upload ({datetime.datetime.now().strftime('%H:%M:%S')})"
+        
+        # If we already have 2 stored, delete the oldest (index 0)
+        if len(st.session_state.history) >= 2:
+            st.session_state.history.pop(0)
+            
+        st.session_state.history.append({"name": run_name, "data": leaderboard})
+        # -------------------------
 
         st.session_state.leaderboard = leaderboard
         st.session_state.pipeline_ran = True
         session.close()
         st.toast("🎉 Pipeline complete!", icon="🚀")
-
     except Exception as exc:
         logger.exception("Pipeline error")
         st.error(f"⚠️ Pipeline Error: {exc}")
@@ -259,7 +270,7 @@ with st.sidebar:
             uploaded = st.file_uploader(
                 "CSV or Excel file",
                 type=["csv", "xlsx"],
-                help="Upload the Gates Tracker export.",
+                help="Upload the Tracker export.",
             )
             # Use form_submit_button instead of standard button
             submitted_upload = st.form_submit_button("🚀 Process Upload", use_container_width=True)
@@ -281,12 +292,65 @@ with st.sidebar:
                 _run_pipeline(sheet_url, is_url=True)
 
     st.divider()
-    
-    if st.button("♻️ Reload from Database", use_container_width=True):
+
+    # --- 🗂️ DATASET HISTORY SELECTOR ---
+    if st.session_state.history:
+        st.markdown("### 🗂️ ACTIVE DATASETS")
+        history_options = [item["name"] for item in st.session_state.history]
+        
+        # Dropdown to switch between the stored datasets
+        selected_run = st.selectbox("Select dataset to view:", history_options, index=len(history_options)-1)
+        
+        # Update the view based on selection
+        for item in st.session_state.history:
+            if item["name"] == selected_run:
+                st.session_state.leaderboard = item["data"]
+                break
+
+    st.divider()
+
+    # --- RELOAD FROM DB ---
+    if st.button("Reload from Database", use_container_width=True):
         st.cache_data.clear()
-        st.session_state.leaderboard = _load_leaderboard_from_db()
-        st.session_state.pipeline_ran = True
+        cached = _load_leaderboard_from_db()
+        if not cached.empty:
+            import datetime
+            run_name = f"DB Load ({datetime.datetime.now().strftime('%H:%M:%S')})"
+            
+            if len(st.session_state.history) >= 2:
+                st.session_state.history.pop(0)
+                
+            st.session_state.history.append({"name": run_name, "data": cached})
+            st.session_state.leaderboard = cached
+            st.session_state.pipeline_ran = True
+        else:
+            st.warning("Database is empty!")
         st.rerun()
+
+    # --- CLEAR DATABASE ---
+    if st.button("Clear Database", use_container_width=True):
+        from database import get_session
+        from models import Student, DailyStat, EmailLog
+        session = get_session()
+        try:
+            # Wipe all data from all 3 tables
+            session.query(EmailLog).delete()
+            session.query(DailyStat).delete()
+            session.query(Student).delete()
+            session.commit()
+            
+            # Reset the session state so the screen clears instantly
+            st.session_state.history = []
+            st.session_state.leaderboard = pd.DataFrame()
+            st.session_state.pipeline_ran = False
+            
+            st.toast("Database successfully cleared!", icon="🗑️")
+            st.rerun()
+        except Exception as e:
+            session.rollback()
+            st.error(f"Failed to clear database: {e}")
+        finally:
+            session.close()
 
     st.divider()
     st.markdown(
@@ -304,12 +368,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Try to load from DB if no pipeline has run yet
-if not st.session_state.pipeline_ran:
-    cached = _load_leaderboard_from_db()
-    if not cached.empty:
-        st.session_state.leaderboard = cached
-        st.session_state.pipeline_ran = True
 
 df = st.session_state.leaderboard
 
