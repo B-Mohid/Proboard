@@ -433,33 +433,45 @@ tab_lb, tab_charts, tab_risk = st.tabs(
 with tab_lb:
     st.subheader("Global Leaderboard")
 
+    # 1. Top-Level Metrics (Cleaned up and deduplicated)
+    t1, t2, t3, t4, t5 = st.columns(5)
+    t1.metric("Total LC Solved", int(df["lc_total"].sum()))
+    t2.metric("Total LC Easy", int(df["lc_easy"].sum()))
+    t3.metric("Total LC Medium", int(df["lc_medium"].sum()))
+    t4.metric("Total LC Hard", int(df["lc_hard"].sum()))
+    t5.metric("Total HR Badges", int(df["hr_badges"].sum()))
+    st.divider()
+
+    # 2. Filter display columns
     display_cols = [
-        "roll_no",
-        "name",
-        "lc_total",
-        "lc_easy",
-        "lc_medium",
-        "lc_hard",
-        "hr_score",
-        "hr_badges",
-        "composite_score",
-        "velocity_7d",
-        "progress_tier",
-        "platform_affinity",
-        "lc_profile",
-        "hr_profile",
+        "roll_no", "name", "lc_total", "lc_easy", "lc_medium",
+        "lc_hard", "hr_score", "hr_badges", "composite_score",
+        "velocity_7d", "progress_tier", "platform_affinity",
+        "lc_profile", "hr_profile",
     ]
-    # Only show columns that exist
+    # Only show columns that exist in the dataframe
     display_cols = [c for c in display_cols if c in df.columns]
     lb_df = df[display_cols].copy()
 
-    # Apply background gradient on composite_score
-    def _style_lb(frame: pd.DataFrame) -> pd.io.formats.style.Styler:
-        return frame.style.background_gradient(
-            subset=["composite_score"],
-            cmap="YlOrRd",
-        ).format({"composite_score": "{:.1f}", "velocity_7d": "{:+.1f}"})
+    # 3. Construct the Totals Row dynamically
+    totals_row = {col: "" for col in display_cols} # Fill text columns with empty strings
+    totals_row["roll_no"] = "∑"
+    totals_row["name"] = "TOTALS"
+    
+    # Define which columns should be summed
+    numeric_cols_to_sum = [
+        "lc_total", "lc_easy", "lc_medium", "lc_hard", 
+        "hr_score", "hr_badges", "composite_score", "velocity_7d"
+    ]
+    for col in numeric_cols_to_sum:
+        if col in lb_df.columns:
+            totals_row[col] = lb_df[col].sum()
 
+    # 4. Append the totals row to the bottom using pd.concat
+    totals_df = pd.DataFrame([totals_row])
+    lb_df = pd.concat([lb_df, totals_df], ignore_index=True)
+
+    # 5. Configuration and Display
     col_config = {
         "roll_no": st.column_config.TextColumn("Roll No", width="small"),
         "name": st.column_config.TextColumn("Student Name", width="medium"),
@@ -469,24 +481,12 @@ with tab_lb:
         "lc_hard": st.column_config.NumberColumn("Hard", width="small"),
         "hr_score": st.column_config.NumberColumn("HR Score", format="%.1f", width="small"),
         "hr_badges": st.column_config.NumberColumn("Badges", width="small"),
-        "composite_score": st.column_config.NumberColumn(
-            "Composite", format="%.1f", width="small"
-        ),
-        "velocity_7d": st.column_config.NumberColumn(
-            "Velocity 7D", format="%+.1f", width="small"
-        ),
+        "composite_score": st.column_config.NumberColumn("Composite", format="%.1f", width="small"),
+        "velocity_7d": st.column_config.NumberColumn("Velocity 7D", format="%+.1f", width="small"),
         "progress_tier": st.column_config.TextColumn("Tier", width="medium"),
         "platform_affinity": st.column_config.TextColumn("Affinity", width="medium"),
-        "lc_profile": st.column_config.LinkColumn(
-            "LeetCode",
-            display_text="Profile ↗",
-            width="small",
-        ),
-        "hr_profile": st.column_config.LinkColumn(
-            "HackerRank",
-            display_text="Profile ↗",
-            width="small",
-        ),
+        "lc_profile": st.column_config.LinkColumn("LeetCode", display_text="Profile ↗", width="small"),
+        "hr_profile": st.column_config.LinkColumn("HackerRank", display_text="Profile ↗", width="small"),
     }
 
     st.dataframe(
@@ -545,87 +545,7 @@ with tab_charts:
             )
             st.plotly_chart(fig_pie, use_container_width=True)
 
-    # --- Radar: Section Comparative Matrix (DSA Topics) ---
-    with chart_right:
-        st.subheader("Section Comparative Matrix")
-        st.caption("Average scores across 13 DSA topic areas")
 
-        # Build topic-level aggregation from basics_score + lc breakdowns
-        # Map available data to DSA topics (simulated distribution)
-        if not df.empty:
-            # Use real breakdown where available
-            avg_easy = df["lc_easy"].mean()
-            avg_med = df["lc_medium"].mean()
-            avg_hard = df["lc_hard"].mean()
-            avg_basics = df["basics_score"].mean() if "basics_score" in df.columns else 0
-            avg_total = df["lc_total"].mean()
-
-            # Distribute across DSA categories proportionally
-            # Basics → Basics, Easy → simpler topics, Med/Hard → complex topics
-            topic_scores = {
-                "Basics": avg_basics,
-                "Array": avg_easy * 0.35,
-                "Two Pointer": avg_easy * 0.15,
-                "Sliding Window": avg_easy * 0.10,
-                "String": avg_easy * 0.25,
-                "Linked List": avg_med * 0.18,
-                "Stack": avg_med * 0.20,
-                "Queue": avg_med * 0.12,
-                "Tree": avg_med * 0.25,
-                "Graph": avg_hard * 0.30,
-                "Heap": avg_hard * 0.25,
-                "Searching": avg_easy * 0.15,
-                "Sorting": avg_med * 0.25,
-            }
-
-            categories = list(topic_scores.keys())
-            values = [round(v, 2) for v in topic_scores.values()]
-            # Close the radar
-            categories_closed = categories + [categories[0]]
-            values_closed = values + [values[0]]
-
-            fig_radar = go.Figure()
-            fig_radar.add_trace(
-                go.Scatterpolar(
-                    r=values_closed,
-                    theta=categories_closed,
-                    fill="toself",
-                    fillcolor="rgba(124, 58, 237, 0.25)",
-                    line=dict(color="#7b00ed", width=2),
-                    marker=dict(size=6, color="#a78bfa"),
-                    name="Cohort Average",
-                )
-            )
-            fig_radar.update_layout(
-                polar=dict(
-                    bgcolor="rgba(0,0,0,0)",
-                    radialaxis=dict(
-                        visible=True,
-                        gridcolor="#333",
-                        linecolor="#444",
-                        tickfont=dict(color="#888", size=10),
-                    ),
-                    angularaxis=dict(
-                        gridcolor="#333",
-                        linecolor="#444",
-                        tickfont=dict(color="#000", size=11),
-                    ),
-                ),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font_color="#000",
-                showlegend=True,
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=-0.15,
-                    xanchor="center",
-                    x=0.5,
-                ),
-                margin=dict(t=30, b=40, l=60, r=60),
-                height=420,
-            )
-            st.plotly_chart(fig_radar, use_container_width=True)
 
     # --- Platform Affinity Breakdown ---
     st.subheader("Platform Affinity Breakdown")
@@ -677,7 +597,7 @@ with tab_charts:
                     f"<span style='color:#aaa;'>{count} students ({pct}%)</span>"
                     f"</div>",
                     unsafe_allow_html=True,
-                )
+                )       
 # ---------------------------------------------------------------------------
 # Helper: Categorization Logic
 # ---------------------------------------------------------------------------
