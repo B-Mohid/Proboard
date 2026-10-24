@@ -6,6 +6,10 @@ PROBOARD is a live, automated analytics dashboard that takes a Google Sheet (or 
 
 **Live Demo:** [https://proboard.streamlit.app](https://proboard.streamlit.app)
 
+
+https://github.com/user-attachments/assets/db630358-701a-4f9e-8e9a-d415e82b7f53
+
+
 ---
 
 ## 🛠️ The Tech Stack
@@ -19,6 +23,83 @@ I kept the stack relatively lightweight but robust enough to handle data ingesti
 * **Visualizations:** `plotly`.
 
 ---
+
+```mermaid
+flowchart TD
+
+subgraph group_ingest["Input and fetching"]
+  node_submissions["Student submissions"]
+  node_cleaner["Ingestion and cleaning<br/>[cleaner.py]"]
+  node_google_sheets["Google Sheets"]
+  node_fetcher["Async stats fetcher<br/>[fetcher.py]"]
+  node_coding_platforms["Coding platforms"]
+end
+
+subgraph group_analytics_ui["Analytics and dashboard"]
+  node_dashboard["Streamlit dashboard<br/>[app.py]"]
+  node_analytics["Cohort analytics<br/>[analytics.py]"]
+  node_config["Runtime configuration<br/>[config.py]"]
+end
+
+subgraph group_persistence["Persistence"]
+  node_db_access["Database access<br/>[database.py]"]
+  node_models["Student and snapshot models<br/>[models.py]"]
+  node_sqlite[("SQLite database<br/>[proboard.db]")]
+end
+
+subgraph group_alerts["Alerts"]
+  node_notifier["At-risk notifier<br/>[notifier.py]"]
+  node_smtp["SMTP email service"]
+end
+
+node_staff(("Staff user"))
+
+node_staff -->|"uses"| node_dashboard
+node_staff -->|"provides"| node_submissions
+node_submissions -->|"ingests"| node_cleaner
+node_cleaner -->|"downloads sheet"| node_google_sheets
+node_cleaner -->|"returns clean data"| node_fetcher
+node_dashboard -->|"invokes"| node_cleaner
+node_dashboard -->|"invokes"| node_fetcher
+node_fetcher -->|"fetches stats"| node_coding_platforms
+node_dashboard -->|"persists and reads"| node_db_access
+node_fetcher -->|"returns stats"| node_dashboard
+node_db_access -->|"uses models"| node_models
+node_db_access -->|"reads and writes"| node_sqlite
+node_analytics -->|"queries snapshots"| node_models
+node_dashboard -->|"builds leaderboard"| node_analytics
+node_analytics -->|"returns analytics"| node_dashboard
+node_dashboard -->|"uses settings"| node_config
+node_fetcher -->|"uses limits"| node_config
+node_notifier -->|"finds at-risk students"| node_analytics
+node_notifier -->|"initializes database"| node_db_access
+node_notifier -->|"logs sent alerts"| node_models
+node_notifier -->|"sends email"| node_smtp
+
+click node_cleaner "[https://github.com/b-mohid/proboard/blob/main/cleaner.py](https://github.com/b-mohid/proboard/blob/main/cleaner.py)"
+click node_fetcher "[https://github.com/b-mohid/proboard/blob/main/fetcher.py](https://github.com/b-mohid/proboard/blob/main/fetcher.py)"
+click node_dashboard "[https://github.com/b-mohid/proboard/blob/main/app.py](https://github.com/b-mohid/proboard/blob/main/app.py)"
+click node_analytics "[https://github.com/b-mohid/proboard/blob/main/analytics.py](https://github.com/b-mohid/proboard/blob/main/analytics.py)"
+click node_config "[https://github.com/b-mohid/proboard/blob/main/config.py](https://github.com/b-mohid/proboard/blob/main/config.py)"
+click node_db_access "[https://github.com/b-mohid/proboard/blob/main/database.py](https://github.com/b-mohid/proboard/blob/main/database.py)"
+click node_models "[https://github.com/b-mohid/proboard/blob/main/models.py](https://github.com/b-mohid/proboard/blob/main/models.py)"
+click node_sqlite "[https://github.com/b-mohid/proboard/blob/main/data/proboard.db](https://github.com/b-mohid/proboard/blob/main/data/proboard.db)"
+click node_notifier "[https://github.com/b-mohid/proboard/blob/main/notifier.py](https://github.com/b-mohid/proboard/blob/main/notifier.py)"
+
+classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
+classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
+classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
+classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
+classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
+class node_submissions,node_cleaner,node_google_sheets,node_fetcher,node_coding_platforms,node_staff toneBlue
+class node_dashboard,node_analytics,node_config toneAmber
+class node_db_access,node_models,node_sqlite toneMint
+class node_notifier,node_smtp toneRose
+
+```
+
 
 ## 🧠 How It Actually Works (The Walkthrough)
 
